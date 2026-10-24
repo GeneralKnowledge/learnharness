@@ -26,6 +26,9 @@ export const PATHS = {
 	/** Chat sessions (AI SDK UIMessage transcripts, one JSON file per chat). */
 	chats: path.join(DATA_ROOT, "chats"),
 	graph: path.join(DATA_ROOT, "graph"),
+	/** Published courses (course-engine wave, 2026-10-24): one JSON file
+	 * per course — the reusable library readers consume without API keys. */
+	courses: path.join(DATA_ROOT, "courses"),
 	/** Debug artifacts (env-gated): data/debug/provider-events/<chatId>.jsonl
 	 * raw provider stream recordings (src/agent/provider-events.ts). */
 	debug: path.join(DATA_ROOT, "debug"),
