@@ -75,3 +75,7 @@ export * from "./coverage.ts";
 // ONE session→markdown formatter — the extractor's view and the user-facing
 // export share it. Pure, browser-safe.
 export * from "./session-markdown.ts";
+// course.ts (course-engine wave, 2026-10-24): session → reusable lesson
+// projection + the reader's grading. Pure, browser-safe.
+export * from "./course.ts";
+export * from "./reader-gate.ts";

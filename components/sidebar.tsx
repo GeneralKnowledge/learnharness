@@ -5,8 +5,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { MenuShell } from "@/components/menu-shell";
 import { DeleteSessionDialog } from "@/components/delete-session-dialog";
+import { PublishCourseDialog } from "@/components/publish-course-dialog";
 import type { ChatDeleteMode } from "@/src/core";
-import { DumbbellIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, PlusIcon, SearchIcon, SettingsIcon } from "lucide-react";
+import { DumbbellIcon, LibraryIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, PlusIcon, SearchIcon, SettingsIcon } from "lucide-react";
 import { ActivitySection } from "@/components/activity-dock";
 import { CoverageMenuBlock } from "@/components/extraction-coverage";
 import { LhMark } from "@/components/lh-mark";
@@ -528,6 +529,7 @@ function SessionsSidebar() {
 	const ctxAnchorRef = useRef<HTMLElement | null>(null);
 	const [renamingId, setRenamingId] = useState<string | null>(null);
 	const [deleting, setDeleting] = useState<ChatListItem | null>(null);
+	const [publishing, setPublishing] = useState<ChatListItem | null>(null);
 
 	const openContext = (e: React.MouseEvent<HTMLButtonElement>, chat: ChatListItem) => {
 		e.preventDefault(); // suppress the native menu
@@ -695,6 +697,16 @@ function SessionsSidebar() {
 						Practice
 						<span className="sr-only">create a new practice session</span>
 					</button>
+					{/* The course library (course-engine wave, 2026-10-24): what
+					    published sessions became — the reader pages, full page. */}
+					<Link
+						href="/courses"
+						data-testid="courses-entry"
+						className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+					>
+						<LibraryIcon className="size-3" />
+						Courses
+					</Link>
 				</div>
 
 				<div className="mx-3 mb-2 flex items-center gap-2">
@@ -892,6 +904,20 @@ function SessionsSidebar() {
 						>
 							Export as Markdown…
 						</button>
+						{/* Publish to course (course-engine wave, 2026-10-24): the
+						    session's teaching material becomes a reusable lesson. */}
+						<button
+							type="button"
+							data-testid="ctx-publish-course"
+							onClick={() => {
+								const target = chats?.find((c) => c.id === ctxChatId);
+								if (target) setPublishing(target);
+								setCtxChatId(null);
+							}}
+							className="flex items-center rounded-lg px-2.5 py-1.5 text-left text-foreground transition-colors hover:bg-accent"
+						>
+							Publish to course…
+						</button>
 						<button
 							type="button"
 							data-testid="ctx-delete"
@@ -911,6 +937,7 @@ function SessionsSidebar() {
 
 				{/* The two-option delete dialog (wave 6) — portaled to body
 				    by the component itself, lives here for state locality. */}
+				<PublishCourseDialog chat={publishing} onClose={() => setPublishing(null)} />
 				<DeleteSessionDialog
 					chat={deleting}
 					onClose={() => setDeleting(null)}

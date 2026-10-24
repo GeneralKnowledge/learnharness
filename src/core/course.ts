@@ -1,0 +1,216 @@
+/**
+ * Session → course lesson — the pure projection behind "Publish to course"
+ * (course-engine wave, owner 2026-10-24).
+ *
+ * A teaching session is one learner's conversation; a lesson is the part of
+ * it that every later reader can reuse. The projection keeps what the
+ * TEACHER authored and drops everything the learner said:
+ *
+ * - teach sessions start at the plan (the first plan-block marker) — the
+ *   probe before it measured one learner and teaches nothing reusable; a
+ *   session without a plan is kept whole;
+ * - assistant text → text blocks (consecutive parts merge into one);
+ * - quiz/probe → choice questions, explain/recall → recall questions, with
+ *   the answers the teacher COMMITTED at pose time (never the learner's);
+ * - delivered visuals and demos (subagent-steer markers) → figure / demo;
+ * - practice sessions keep only their problems and model solutions — the
+ *   hints between them answer one learner's attempts.
+ *
+ * A call whose result came back as an error was never posed and is dropped.
+ * Pure and deterministic: same record in, same blocks out.
+ */
+
+import type { ChatRecord, PlanBlockData } from "./contracts/chat.ts";
+import type { DemoResult, SteerDetails, VisualResult } from "./contracts/jobs.ts";
+import type { CourseBlock, CourseLesson, CourseQuestionOption, CourseRecord, CourseSummary } from "./contracts/course.ts";
+import { PRACTICE_PROBLEM_TOOL, type LhMessage } from "./native-messages.ts";
+
+const CHOICE_TOOLS = new Set(["quiz", "probe"]);
+const RECALL_TOOLS = new Set(["explain", "recall"]);
+
+const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
+
+/** Options as authored — tolerating the JSON-string encoding some models
+ *  send (the same heal the question tools apply at call time). */
+function optionsOf(raw: unknown): CourseQuestionOption[] {
+	let value = raw;
+	if (typeof value === "string") {
+		try {
+			value = JSON.parse(value);
+		} catch {
+			return [];
+		}
+	}
+	if (!Array.isArray(value)) return [];
+	return value
+		.map((o) => ({ label: str((o as { label?: unknown })?.label), value: str((o as { value?: unknown })?.value) }))
+		.filter((o) => o.label.length > 0 && o.value.length > 0);
+}
+
+/** correctAnswer → option values (a label is accepted, like the grader does). */
+function correctValues(raw: unknown, options: readonly CourseQuestionOption[]): string[] {
+	const entries = (Array.isArray(raw) ? raw : [raw]).map(str).filter((s) => s.length > 0);
+	const out: string[] = [];
+	for (const entry of entries) {
+		const match = options.find((o) => o.value === entry) ?? options.find((o) => o.label === entry);
+		if (match && !out.includes(match.value)) out.push(match.value);
+	}
+	return out;
+}
+
+function choiceBlock(args: Record<string, unknown>): CourseBlock | null {
+	const question = str(args.question);
+	const options = optionsOf(args.options);
+	const correct = correctValues(args.correctAnswer, options);
+	if (!question || options.length < 2 || correct.length === 0) return null;
+	const explanation = str(args.explanation);
+	const role = str(args.type);
+	return {
+		kind: "choice",
+		question,
+		options,
+		correct,
+		multiSelect: args.multiSelect === true || correct.length > 1,
+		...(explanation ? { explanation } : {}),
+		...(role ? { role } : {}),
+	};
+}
+
+function recallBlock(args: Record<string, unknown>): CourseBlock | null {
+	const question = str(args.question);
+	const answer = str(args.correctAnswer);
+	if (!question || !answer) return null;
+	const role = str(args.type);
+	return { kind: "recall", question, answer, ...(role ? { role } : {}) };
+}
+
+function problemBlock(args: Record<string, unknown>): CourseBlock | null {
+	const statement = str(args.statement);
+	const solution = str(args.modelSolution);
+	if (!statement || !solution) return null;
+	return { kind: "problem", statement, solution };
+}
+
+/** A delivered visual or demo — failures (empty svg/html) render nothing. */
+function artifactBlock(details: unknown): CourseBlock | null {
+	const d = details as Partial<SteerDetails> | undefined;
+	if (!d || d.aborted || !d.result) return null;
+	if (d.kind === "visual") {
+		const svg = (d.result as VisualResult).svg;
+		return typeof svg === "string" && svg.length > 0 ? { kind: "visual", svg } : null;
+	}
+	if (d.kind === "demo") {
+		const r = d.result as DemoResult;
+		return typeof r.html === "string" && r.html.length > 0 ? { kind: "demo", title: str(r.title) || "Demo", html: r.html } : null;
+	}
+	return null;
+}
+
+/** The plan map as a reader sees it: no learner position, every node upcoming. */
+function planBlock(details: unknown): CourseBlock | null {
+	const d = details as Partial<PlanBlockData> | undefined;
+	if (!d || !Array.isArray(d.nodes) || d.nodes.length === 0 || !Array.isArray(d.edges)) return null;
+	return {
+		kind: "plan",
+		data: {
+			kind: "full",
+			at: str(d.at),
+			current: null,
+			nodes: d.nodes.map((n) => ({ id: n.id, title: n.title, status: "upcoming" as const })),
+			edges: d.edges.map((e) => ({ from: e.from, to: e.to })),
+		},
+	};
+}
+
+/** The lesson material of one session, in reading order. */
+export function courseBlocksFromMessages(messages: readonly LhMessage[], kind: "teach" | "practice" = "teach"): CourseBlock[] {
+	const failed = new Set<string>();
+	for (const m of messages) {
+		if (m.role === "toolResult" && m.isError) failed.add(m.toolCallId);
+	}
+	const firstPlan = messages.findIndex((m) => m.role === "custom" && m.customType === "plan-block");
+	const start = kind === "teach" && firstPlan >= 0 ? firstPlan : 0;
+
+	const blocks: CourseBlock[] = [];
+	const push = (block: CourseBlock | null) => {
+		if (!block) return;
+		const last = blocks.at(-1);
+		if (block.kind === "text" && last?.kind === "text") {
+			last.markdown = `${last.markdown}\n\n${block.markdown}`;
+			return;
+		}
+		blocks.push(block);
+	};
+
+	for (const m of messages.slice(start)) {
+		if (m.role === "custom") {
+			if (kind === "practice") continue;
+			if (m.customType === "plan-block") push(planBlock(m.details));
+			else if (m.customType === "subagent-steer") push(artifactBlock(m.details));
+			continue;
+		}
+		if (m.role !== "assistant") continue;
+		for (const part of m.content) {
+			if (part.type === "text") {
+				if (kind === "teach" && part.text.trim()) push({ kind: "text", markdown: part.text.trim() });
+				continue;
+			}
+			if (part.type !== "toolCall" || failed.has(part.id)) continue;
+			const args = (part.arguments ?? {}) as Record<string, unknown>;
+			if (kind === "practice") {
+				if (part.name === PRACTICE_PROBLEM_TOOL) push(problemBlock(args));
+				continue;
+			}
+			if (CHOICE_TOOLS.has(part.name)) push(choiceBlock(args));
+			else if (RECALL_TOOLS.has(part.name)) push(recallBlock(args));
+		}
+	}
+	return blocks;
+}
+
+/** One session as a lesson. `id`/`now` are injected so the projection stays pure. */
+export function courseLessonFromChat(
+	chat: ChatRecord,
+	opts: { id: string; now: string; title?: string },
+): CourseLesson {
+	return {
+		id: opts.id,
+		title: str(opts.title) || chat.title,
+		sourceChatId: chat.id,
+		publishedAt: opts.now,
+		blocks: courseBlocksFromMessages(chat.messages, chat.kind ?? "teach"),
+	};
+}
+
+/** Add a lesson, or replace the one published from the same session in place
+ *  (keeping its id and position, so reader links and progress survive). */
+export function upsertCourseLesson(course: CourseRecord, lesson: CourseLesson, now: string): CourseRecord {
+	const idx = course.lessons.findIndex((l) => l.sourceChatId === lesson.sourceChatId);
+	const lessons =
+		idx < 0
+			? [...course.lessons, lesson]
+			: course.lessons.map((l, i) => (i === idx ? { ...lesson, id: l.id } : l));
+	return { ...course, lessons, updatedAt: now };
+}
+
+/** Drop one lesson; the course is returned unchanged when the id is unknown. */
+export function removeCourseLesson(course: CourseRecord, lessonId: string, now: string): CourseRecord {
+	if (!course.lessons.some((l) => l.id === lessonId)) return course;
+	return { ...course, lessons: course.lessons.filter((l) => l.id !== lessonId), updatedAt: now };
+}
+
+export function courseSummary(course: CourseRecord): CourseSummary {
+	return {
+		id: course.id,
+		title: course.title,
+		...(course.description ? { description: course.description } : {}),
+		createdAt: course.createdAt,
+		updatedAt: course.updatedAt,
+		lessons: course.lessons.map((l) => ({ id: l.id, title: l.title })),
+	};
+}
+
+/** Grade a choice selection: right only when it is exactly the correct set. */
+export function isChoiceCorrect(selected: readonly string[], correct: readonly string[]): boolean {
+	return selected.length === correct.length && correct.every((v) => selected.includes(v));
+}

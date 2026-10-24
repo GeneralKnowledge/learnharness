@@ -25,6 +25,8 @@ import type {
 	SessionCheckpoint,
 	TurnUsage,
 	NotesSource,
+	CourseRecord,
+	CourseSummary,
 } from "./contracts.ts";
 import type { UserSettings } from "./settings.ts";
 
@@ -156,6 +158,25 @@ export interface JobStore {
 	 *  route refuses while jobs are still running, so by the time this
 	 *  fires every record is terminal. */
 	deleteJobsForChat(chatId: string): number;
+}
+
+// ─── CourseStore — published courses (data/courses) ──────────────────────────
+
+/** The reusable library (course-engine wave, owner 2026-10-24): one record
+ *  per course, replace-whole like a chat file. Lesson assembly (upsert by
+ *  source session, removal) is pure core (core/course.ts); the store only
+ *  persists what it is handed. */
+export interface CourseStore {
+	/** Create an empty course (persisted immediately). */
+	createCourse(title: string): CourseRecord;
+	/** The full record, or null if unknown id / corrupt file. */
+	getCourse(id: string): CourseRecord | null;
+	/** Every course, most recently updated first. */
+	listCourses(): CourseSummary[];
+	/** Persist the whole record (replace-whole). */
+	saveCourse(course: CourseRecord): void;
+	/** Delete the course. False when the id is unknown. */
+	deleteCourse(id: string): boolean;
 }
 
 // ─── SettingsStore — THE user settings record (settings-storage wave, 2026-09-19) ──
