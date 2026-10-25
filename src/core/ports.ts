@@ -27,6 +27,8 @@ import type {
 	NotesSource,
 	CourseRecord,
 	CourseSummary,
+	ProgrammeRecord,
+	ProgrammeSummary,
 } from "./contracts.ts";
 import type { UserSettings } from "./settings.ts";
 
@@ -177,6 +179,23 @@ export interface CourseStore {
 	saveCourse(course: CourseRecord): void;
 	/** Delete the course. False when the id is unknown. */
 	deleteCourse(id: string): boolean;
+}
+
+// ─── ProgrammeStore — multi-course programmes (data/programmes) ──────────────
+
+/** Programmes (programme wave, owner 2026-10-25): one record per programme,
+ *  replace-whole. Structure rules are pure core (core/programme.ts). */
+export interface ProgrammeStore {
+	/** Persist a new programme with the given stages. */
+	createProgramme(input: Pick<ProgrammeRecord, "title" | "description" | "stages">): ProgrammeRecord;
+	/** The full record, or null if unknown id / corrupt file. */
+	getProgramme(id: string): ProgrammeRecord | null;
+	/** Every programme, most recently updated first. */
+	listProgrammes(): ProgrammeSummary[];
+	/** Persist the whole record (replace-whole). */
+	saveProgramme(programme: ProgrammeRecord): void;
+	/** Delete the programme (never its courses). False when the id is unknown. */
+	deleteProgramme(id: string): boolean;
 }
 
 // ─── SettingsStore — THE user settings record (settings-storage wave, 2026-09-19) ──

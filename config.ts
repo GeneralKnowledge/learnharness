@@ -29,6 +29,9 @@ export const PATHS = {
 	/** Published courses (course-engine wave, 2026-10-24): one JSON file
 	 * per course — the reusable library readers consume without API keys. */
 	courses: path.join(DATA_ROOT, "courses"),
+	/** Programmes (programme wave, 2026-10-25): one JSON file per
+	 * programme — stages of courses, with credits and prerequisites. */
+	programmes: path.join(DATA_ROOT, "programmes"),
 	/** Debug artifacts (env-gated): data/debug/provider-events/<chatId>.jsonl
 	 * raw provider stream recordings (src/agent/provider-events.ts). */
 	debug: path.join(DATA_ROOT, "debug"),

@@ -4,7 +4,8 @@
  * and never reach the studio, its sessions, settings, or anything that
  * spends API keys. Pure: proxy.ts asks it about every request.
  *
- * Allowed: the /courses pages, GET on /api/courses*, and the framework's
+ * Allowed: the /courses and /programmes pages, GET on /api/courses* and
+ * /api/programmes*, and the framework's
  * own assets. "/" lands on the library. Everything else is not found —
  * a 404 rather than a 403, so the studio's routes don't announce themselves.
  */
@@ -18,9 +19,10 @@ export function isReaderMode(env: Record<string, string | undefined>): boolean {
 
 export function readerGate(pathname: string, method: string): ReaderGateVerdict {
 	if (pathname === "/") return "home";
-	if (pathname === "/courses" || pathname.startsWith("/courses/")) return "allow";
+	const under = (root: string) => pathname === root || pathname.startsWith(`${root}/`);
+	if (under("/courses") || under("/programmes")) return "allow";
 	if (pathname.startsWith("/_next/")) return "allow";
-	if (pathname === "/api/courses" || pathname.startsWith("/api/courses/")) {
+	if (under("/api/courses") || under("/api/programmes")) {
 		return method === "GET" || method === "HEAD" ? "allow" : "deny";
 	}
 	// Public static files (fonts, icons) — a final segment with an extension.

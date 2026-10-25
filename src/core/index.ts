@@ -78,4 +78,7 @@ export * from "./session-markdown.ts";
 // course.ts (course-engine wave, 2026-10-24): session → reusable lesson
 // projection + the reader's grading. Pure, browser-safe.
 export * from "./course.ts";
+// programme.ts (programme wave, 2026-10-25): multi-course programmes —
+// outline parsing and structure checks. Pure, browser-safe.
+export * from "./programme.ts";
 export * from "./reader-gate.ts";

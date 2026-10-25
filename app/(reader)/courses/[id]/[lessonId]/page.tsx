@@ -22,6 +22,7 @@ export default async function LessonPage({ params }: { params: Promise<{ id: str
 			</Link>
 			<div className="mt-4 text-xs uppercase tracking-wider text-muted-foreground">
 				Lesson {index + 1} of {course.lessons.length}
+				{lesson.section && <> · {lesson.section}</>}
 			</div>
 			<h1 className="mt-1 font-title text-3xl tracking-tight text-foreground">{lesson.title}</h1>
 			<article className="mt-8">

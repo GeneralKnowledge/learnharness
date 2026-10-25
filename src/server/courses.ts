@@ -1,4 +1,11 @@
-import { courseLessonFromChat, removeCourseLesson, upsertCourseLesson } from "../core/course.ts";
+import {
+	courseLessonFromChat,
+	removeCourseLesson,
+	reorderCourseLessons,
+	updateCourseLesson,
+	upsertCourseLesson,
+} from "../core/course.ts";
+import { removeProgrammeCourse } from "../core/programme.ts";
 import {
 	applyCleanup,
 	batchSegments,
@@ -166,6 +173,41 @@ export function deleteCourseLesson(courseId: string, lessonId: string): CourseRe
 	return next;
 }
 
+/** Put a course's lessons in a new order (every lesson, once). Null when
+ *  the course is unknown; "invalid" when the ids are not a reordering. */
+export function reorderCourse(courseId: string, lessonIds: readonly string[]): CourseRecord | null | "invalid" {
+	const course = stores.courseStore.getCourse(courseId);
+	if (!course) return null;
+	const next = reorderCourseLessons(course, lessonIds, new Date().toISOString());
+	if (!next) return "invalid";
+	stores.courseStore.saveCourse(next);
+	return next;
+}
+
+/** Rename one lesson or set its section. Null when the course or lesson is
+ *  unknown. */
+export function updateCourseLessonDetails(
+	courseId: string,
+	lessonId: string,
+	patch: { title?: string; section?: string },
+): CourseLesson | null {
+	const course = stores.courseStore.getCourse(courseId);
+	if (!course) return null;
+	const next = updateCourseLesson(course, lessonId, patch, new Date().toISOString());
+	if (next === course) return null;
+	stores.courseStore.saveCourse(next);
+	return next.lessons.find((l) => l.id === lessonId) ?? null;
+}
+
+/** Delete a course, and take it out of every programme that listed it. */
 export function deleteCourse(id: string): boolean {
-	return stores.courseStore.deleteCourse(id);
+	if (!stores.courseStore.deleteCourse(id)) return false;
+	const now = new Date().toISOString();
+	for (const summary of stores.programmeStore.listProgrammes()) {
+		const programme = stores.programmeStore.getProgramme(summary.id);
+		if (!programme) continue;
+		const next = removeProgrammeCourse(programme, id, now);
+		if (next !== programme) stores.programmeStore.saveProgramme(next);
+	}
+	return true;
 }
