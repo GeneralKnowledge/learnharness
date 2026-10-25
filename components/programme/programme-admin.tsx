@@ -45,6 +45,7 @@ export function ProgrammeAdmin({ view }: { view: ProgrammeView }) {
 	const courseTitle = (id: string) => view.courses.find((c) => c.id === id)?.title ?? id;
 	const [title, setTitle] = useState(programme.title);
 	const [description, setDescription] = useState(programme.description ?? "");
+	const [audience, setAudience] = useState(programme.audience ?? "");
 	const [stages, setStages] = useState<EditStage[]>(
 		programme.stages.map((s) => ({
 			id: s.id,
@@ -84,6 +85,7 @@ export function ProgrammeAdmin({ view }: { view: ProgrammeView }) {
 		const body = {
 			title,
 			description,
+			audience,
 			stages: stages.map((s) => ({
 				id: s.id,
 				title: s.title,
@@ -142,6 +144,18 @@ export function ProgrammeAdmin({ view }: { view: ProgrammeView }) {
 				onChange={(e) => setDescription(e.target.value)}
 				className={`mt-1.5 w-full resize-y ${input}`}
 			/>
+
+			<label className="mt-3 block text-xs uppercase tracking-wider text-muted-foreground" htmlFor="programme-audience">
+				Audience
+			</label>
+			<input
+				id="programme-audience"
+				placeholder="Who it is for, e.g. first-year undergraduates with school maths"
+				value={audience}
+				onChange={(e) => setAudience(e.target.value)}
+				className={`mt-1.5 w-full ${input}`}
+			/>
+			<p className="mt-1 text-xs text-muted-foreground">The author agent writes every lesson for this reader.</p>
 
 			<div className="mt-6 text-xs uppercase tracking-wider text-muted-foreground">Stages</div>
 			<div className="mt-2 flex flex-col gap-4">

@@ -1,5 +1,7 @@
 import {
+	addPlannedLessons,
 	courseLessonFromChat,
+	isPlannedLesson,
 	removeCourseLesson,
 	reorderCourseLessons,
 	updateCourseLesson,
@@ -42,6 +44,8 @@ export type CleanupRewriter = (prompt: string) => Promise<string>;
 
 
 export const { getCourse, listCourses } = stores.courseStore;
+
+export const newLessonId = () => `lesson_${Date.now().toString(36)}_${crypto.randomUUID().slice(0, 8)}`;
 
 export type PublishOutcome =
 	| { ok: false; status: 400 | 404 | 409; error: string }
@@ -100,8 +104,11 @@ export async function publishChatToCourse(
 	courseId?: string;
 	/** The new course's title (only with no courseId; defaults to the session title). */
 	courseTitle?: string;
-	/** The lesson title (defaults to the session title). */
+	/** The lesson title (defaults to the session title, or the planned
+	 *  lesson's title when filling one). */
 	lessonTitle?: string;
+	/** Fill this planned lesson of the course (author wave, 2026-10-25). */
+	intoLessonId?: string;
 	/** Rewrite learner-specific wording before storing (default off here;
 	 *  the route turns it on unless the dialog opts out). */
 	cleanup?: boolean;
@@ -113,15 +120,18 @@ export async function publishChatToCourse(
 	// The record is mid-write while a turn runs; publish what has settled.
 	if (isTurnRunning(chat.id)) return { ok: false, status: 409, error: "Wait for the current turn to finish, then publish." };
 
-	if (input.courseId && !stores.courseStore.getCourse(input.courseId)) {
-		return { ok: false, status: 404, error: "Course not found" };
+	const target = input.courseId ? stores.courseStore.getCourse(input.courseId) : null;
+	if (input.courseId && !target) return { ok: false, status: 404, error: "Course not found" };
+	const planned = input.intoLessonId ? target?.lessons.find((l) => l.id === input.intoLessonId) : undefined;
+	if (input.intoLessonId && (!planned || !isPlannedLesson(planned))) {
+		return { ok: false, status: 409, error: "That lesson isn't a planned lesson of this course." };
 	}
 
 	const now = new Date().toISOString();
 	const lesson = courseLessonFromChat(chat, {
-		id: `lesson_${Date.now().toString(36)}_${crypto.randomUUID().slice(0, 8)}`,
+		id: newLessonId(),
 		now,
-		title: input.lessonTitle,
+		title: input.lessonTitle ?? planned?.title,
 	});
 	if (lesson.blocks.length === 0) {
 		return { ok: false, status: 400, error: "This session has no teaching material to publish yet." };
@@ -140,7 +150,7 @@ export async function publishChatToCourse(
 	if (input.courseId && !existing) return { ok: false, status: 404, error: "Course not found" };
 	const course = existing ?? stores.courseStore.createCourse(input.courseTitle?.trim() || chat.title);
 	const replaced = course.lessons.some((l) => l.sourceChatId === chat.id);
-	const next = upsertCourseLesson(course, lesson, now);
+	const next = upsertCourseLesson(course, lesson, now, input.intoLessonId);
 	stores.courseStore.saveCourse(next);
 	const stored = next.lessons.find((l) => l.sourceChatId === chat.id) ?? lesson;
 	return { ok: true, course: next, lesson: stored, replaced, cleanup };
@@ -184,12 +194,12 @@ export function reorderCourse(courseId: string, lessonIds: readonly string[]): C
 	return next;
 }
 
-/** Rename one lesson or set its section. Null when the course or lesson is
- *  unknown. */
+/** Rename one lesson or set its section or brief. Null when the course or
+ *  lesson is unknown. */
 export function updateCourseLessonDetails(
 	courseId: string,
 	lessonId: string,
-	patch: { title?: string; section?: string },
+	patch: { title?: string; section?: string; brief?: string },
 ): CourseLesson | null {
 	const course = stores.courseStore.getCourse(courseId);
 	if (!course) return null;
@@ -197,6 +207,18 @@ export function updateCourseLessonDetails(
 	if (next === course) return null;
 	stores.courseStore.saveCourse(next);
 	return next.lessons.find((l) => l.id === lessonId) ?? null;
+}
+
+/** Plan lessons at the end of a course. Null when the course is unknown. */
+export function planCourseLessons(
+	courseId: string,
+	items: ReadonlyArray<{ title: string; brief?: string; section?: string }>,
+): CourseRecord | null {
+	const course = stores.courseStore.getCourse(courseId);
+	if (!course) return null;
+	const next = addPlannedLessons(course, items.map((item) => ({ ...item, id: newLessonId() })), new Date().toISOString());
+	if (next !== course) stores.courseStore.saveCourse(next);
+	return next;
 }
 
 /** Delete a course, and take it out of every programme that listed it. */

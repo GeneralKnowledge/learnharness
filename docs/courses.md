@@ -24,6 +24,17 @@ Publishing the same session again replaces its lesson in place, so a course can 
 
 Open **Edit course** on a course page to move lessons up and down, rename them, and give them a section. Lessons next to each other with the same section are shown under one heading. Re-publishing a session keeps its lesson's place and section.
 
+## Planned lessons and the author agent
+
+A lesson can be planned before it is written: a title, an optional section, and a brief saying what it should cover. Plan lessons under **Edit course → Plan a lesson**, or give a module a `lessons` list in a programme outline (below). Readers see planned lessons as "coming soon".
+
+A planned lesson is filled in one of two ways:
+
+- **From a session.** Teach the topic in a session, then choose **Publish to course…** and pick the planned lesson under the course. The lesson keeps its place, section and brief.
+- **By the author agent.** Under **Edit course**, press **Write** on one lesson or **Write N planned lessons with the author agent**. The author agent writes the whole lesson from its brief, with no live Q&A: it knows the programme's audience, the module, the modules it requires, and the lessons before and after it. Its questions go into the lesson with their answers, and the figures and demos it asks for are built and checked before they are placed. Lessons are written one at a time in the background, using the conversation model for writing and the figure and demo models for those builders. Each written lesson shows what it cost, and can be rewritten from the same brief.
+
+The author agent never rewrites a lesson that was published from a session. Its prompt is `src/agent/prompts/author/00-base.md` followed by the teacher's method, question-principles, accuracy, voice and formatting fragments.
+
 ## Programmes
 
 A programme arranges courses into a whole degree, certificate or curriculum. It has stages in order (you name them: "Year 1", "Level 4", "Foundation"), each stage lists modules, and each module is a course with optional credits, an optional flag, and the modules it requires. The engine knows nothing about the subject, so a history or medicine programme is just a different outline.
@@ -34,12 +45,21 @@ To lay out a programme in one go, open **New programme from an outline** at the 
 {
   "title": "BA History",
   "description": "Three years of history.",
+  "audience": "Undergraduates with A-level history or equivalent",
   "stages": [
     {
       "title": "Year 1",
       "modules": [
         { "title": "Historical Method", "key": "method", "credits": 20 },
-        { "title": "The Medieval World", "credits": 20, "requires": ["method"] }
+        {
+          "title": "The Medieval World",
+          "credits": 20,
+          "requires": ["method"],
+          "lessons": [
+            "What 'medieval' means",
+            { "title": "Feudal obligations", "brief": "Lords, vassals and the manor", "section": "Society" }
+          ]
+        }
       ]
     },
     {
@@ -55,6 +75,8 @@ To lay out a programme in one go, open **New programme from an outline** at the 
 
 - Every module without a `courseId` becomes a new, empty course; publish sessions into it as usual. Give `courseId` to reuse a course you already have.
 - `requires` names other modules by `key`, by exact title, or by course id.
+- `lessons` plans the module's lessons in order: a title, or `{ title, brief?, section? }`.
+- `audience` says who the programme is for; the author agent writes every lesson for that reader.
 - Nothing is created unless the whole outline checks out.
 
 The programme page shows each stage's modules, credits and this browser's progress. Prerequisites are advice: a module says what to finish first but never locks. Under **Edit programme** you can rename stages, move modules between stages, change credits and requirements, and add courses from the library. It also lists anything to fix: a module listed twice, a requirement that isn't in the programme, one that comes in a later stage, or requirements that loop. Deleting a course takes it out of every programme; deleting a programme keeps its courses.

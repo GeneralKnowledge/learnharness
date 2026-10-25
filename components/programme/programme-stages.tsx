@@ -15,7 +15,10 @@ export interface StageModule {
 	courseId: string;
 	title: string;
 	description?: string;
+	/** Written lessons only. */
 	lessonIds: string[];
+	/** Lessons planned but not written yet. */
+	planned: number;
 	credits?: number;
 	optional: boolean;
 	requires: Array<{ courseId: string; title: string }>;
@@ -81,6 +84,7 @@ export function ProgrammeStages({ stages }: { stages: readonly Stage[] }) {
 										</div>
 										<div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs uppercase tracking-wider text-muted-foreground">
 											<span>{lessons === 0 ? "Coming soon" : `${read} of ${lessons} lessons`}</span>
+											{lessons > 0 && m.planned > 0 && <span>{m.planned} more coming</span>}
 											{m.credits !== undefined && <span>{m.credits} credits</span>}
 											{m.optional && <span>Optional</span>}
 										</div>

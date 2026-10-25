@@ -56,7 +56,7 @@ export default function CoursesPage() {
 									<p className="mt-1.5 font-sans text-base text-muted-foreground">{course.description}</p>
 								)}
 								<div className="mt-3 text-xs uppercase tracking-wider text-muted-foreground">
-									{course.lessons.length} {course.lessons.length === 1 ? "lesson" : "lessons"}
+									<LessonCount lessons={course.lessons} />
 								</div>
 							</Link>
 						</li>
@@ -65,5 +65,16 @@ export default function CoursesPage() {
 			)}
 			{!reader && <ProgrammeImport />}
 		</main>
+	);
+}
+
+function LessonCount({ lessons }: { lessons: ReadonlyArray<{ planned?: true }> }) {
+	const written = lessons.filter((l) => !l.planned).length;
+	const planned = lessons.length - written;
+	return (
+		<>
+			{written} {written === 1 ? "lesson" : "lessons"}
+			{planned > 0 && <> · {planned} coming soon</>}
+		</>
 	);
 }

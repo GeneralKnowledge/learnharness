@@ -81,4 +81,7 @@ export * from "./course.ts";
 // programme.ts (programme wave, 2026-10-25): multi-course programmes —
 // outline parsing and structure checks. Pure, browser-safe.
 export * from "./programme.ts";
+// course-author.ts (author wave, 2026-10-25): the author agent's brief and
+// its run → lesson projection. Pure, browser-safe.
+export * from "./course-author.ts";
 export * from "./reader-gate.ts";

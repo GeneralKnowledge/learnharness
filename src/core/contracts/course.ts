@@ -11,7 +11,7 @@
  * (core/course.ts courseLessonFromChat); the fs adapter is src/store/courses.ts.
  */
 
-import type { PlanBlockData } from "./chat.ts";
+import type { CallUsage, PlanBlockData } from "./chat.ts";
 
 /** Bumped only for breaking shape changes — same lazy discipline as chats. */
 export const CURRENT_COURSE_VERSION = 1;
@@ -56,9 +56,22 @@ export interface CourseLesson {
 	id: string;
 	title: string;
 	/** The session this lesson was published from — re-publishing that
-	 *  session REPLACES this lesson in place (idempotent by source). */
+	 *  session REPLACES this lesson in place (idempotent by source). Empty
+	 *  while the lesson is planned. */
 	sourceChatId: string;
 	publishedAt: string;
+	/** "planned" (author wave, 2026-10-25): a placeholder for a lesson not
+	 *  written yet — a title and a brief, no blocks. Readers see it as
+	 *  "coming soon"; publishing a session into it fills it in place.
+	 *  Absent = written. */
+	status?: "planned";
+	/** What the lesson should cover — the author's brief. Kept when the
+	 *  lesson is written, so it can be regenerated from the same brief. */
+	brief?: string;
+	/** Set when the author agent wrote this lesson (core/course-author.ts):
+	 *  when, and the model calls it cost, per model (the author's own and
+	 *  any figure or demo builders). */
+	authored?: { at: string; usage: Array<{ model: string; steps: CallUsage[] }> };
 	/** The section heading this lesson sits under (programme wave,
 	 *  2026-10-25). Consecutive lessons with the same section form one group
 	 *  in reading order; absent = no heading. */
@@ -86,7 +99,7 @@ export interface CourseSummary {
 	description?: string;
 	createdAt: string;
 	updatedAt: string;
-	lessons: Array<{ id: string; title: string; section?: string }>;
+	lessons: Array<{ id: string; title: string; section?: string; planned?: true }>;
 }
 
 /** What the publish-time wording cleanup did (core/course-cleanup.ts):
