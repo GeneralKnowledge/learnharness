@@ -26,6 +26,8 @@ export function PublishCourseDialog({
 }) {
 	const [courses, setCourses] = useState<CourseSummary[] | null>(null);
 	const [target, setTarget] = useState<string>(NEW_COURSE);
+	/** A planned lesson of the target course to fill; "" = add a new lesson. */
+	const [into, setInto] = useState("");
 	const [title, setTitle] = useState("");
 	const [busy, setBusy] = useState(false);
 	const [cleanup, setCleanup] = useState(true);
@@ -43,6 +45,7 @@ export function PublishCourseDialog({
 	useEffect(() => {
 		if (!chat) return;
 		setTarget(NEW_COURSE);
+		setInto("");
 		setTitle(chat.title);
 		setCleanup(true);
 		setBusy(false);
@@ -79,7 +82,7 @@ export function PublishCourseDialog({
 				body: JSON.stringify(
 					target === NEW_COURSE
 						? { chatId: chat.id, courseTitle: title, cleanup }
-						: { chatId: chat.id, courseId: target, cleanup },
+						: { chatId: chat.id, courseId: target, cleanup, ...(into ? { intoLessonId: into } : {}) },
 				),
 			});
 			const body = (await res.json()) as {
@@ -193,7 +196,10 @@ export function PublishCourseDialog({
 							data-testid="publish-course-target"
 							value={target}
 							disabled={busy || courses === null}
-							onChange={(e) => setTarget(e.target.value)}
+							onChange={(e) => {
+								setTarget(e.target.value);
+								setInto("");
+							}}
 							className="mt-1.5 w-full rounded-md border bg-background px-2.5 py-1.5 text-sm text-foreground"
 						>
 							<option value={NEW_COURSE}>New course…</option>
@@ -203,6 +209,27 @@ export function PublishCourseDialog({
 								</option>
 							))}
 						</select>
+						{(() => {
+							const planned = courses?.find((c) => c.id === target)?.lessons.filter((l) => l.planned) ?? [];
+							if (planned.length === 0) return null;
+							return (
+								<select
+									aria-label="Planned lesson"
+									data-testid="publish-course-into"
+									value={into}
+									disabled={busy}
+									onChange={(e) => setInto(e.target.value)}
+									className="mt-2 w-full rounded-md border bg-background px-2.5 py-1.5 text-sm text-foreground"
+								>
+									<option value="">Add as a new lesson</option>
+									{planned.map((l) => (
+										<option key={l.id} value={l.id}>
+											Fill planned lesson: {l.title}
+										</option>
+									))}
+								</select>
+							);
+						})()}
 						{target === NEW_COURSE && (
 							<input
 								type="text"

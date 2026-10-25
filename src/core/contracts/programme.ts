@@ -44,6 +44,9 @@ export interface ProgrammeRecord {
 	id: string;
 	title: string;
 	description?: string;
+	/** Who the programme is for ("first-year undergraduates with GCSE
+	 *  maths") — the author agent writes every lesson for this reader. */
+	audience?: string;
 	createdAt: string;
 	updatedAt: string;
 	version?: number;
@@ -73,11 +76,13 @@ export type ProgrammeIssue =
  * A whole programme written as one file (POST /api/programmes): stages of
  * modules by TITLE. A module without a courseId becomes a new, empty course
  * to fill later; `requires` names other modules of the outline by their
- * `key` or exact title, or an existing course id.
+ * `key` or exact title, or an existing course id. A module's `lessons` are
+ * planned at the end of its course.
  */
 export interface ProgrammeOutline {
 	title: string;
 	description?: string;
+	audience?: string;
 	stages: Array<{
 		title: string;
 		description?: string;
@@ -91,8 +96,18 @@ export interface ProgrammeOutline {
 			credits?: number;
 			optional?: boolean;
 			requires?: string[];
+			/** Lessons to plan in the module's course, in order (a plain
+			 *  string is a title). They show as "coming soon" until written. */
+			lessons?: OutlineLesson[];
 		}>;
 	}>;
+}
+
+/** One planned lesson in an outline. */
+export interface OutlineLesson {
+	title: string;
+	brief?: string;
+	section?: string;
 }
 
 /** One module as the programme page shows it. `course` is null when the

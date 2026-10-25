@@ -58,7 +58,8 @@ function correctValues(raw: unknown, options: readonly CourseQuestionOption[]): 
 	return out;
 }
 
-function choiceBlock(args: Record<string, unknown>): CourseBlock | null {
+/** A quiz/probe call's arguments as a choice block (null when ungradeable). */
+export function choiceBlock(args: Record<string, unknown>): CourseBlock | null {
 	const question = str(args.question);
 	const options = optionsOf(args.options);
 	const correct = correctValues(args.correctAnswer, options);
@@ -76,7 +77,8 @@ function choiceBlock(args: Record<string, unknown>): CourseBlock | null {
 	};
 }
 
-function recallBlock(args: Record<string, unknown>): CourseBlock | null {
+/** An explain/recall call's arguments as a recall block. */
+export function recallBlock(args: Record<string, unknown>): CourseBlock | null {
 	const question = str(args.question);
 	const answer = str(args.correctAnswer);
 	if (!question || !answer) return null;
@@ -184,16 +186,51 @@ export function courseLessonFromChat(
 
 /** Add a lesson, or replace the one published from the same session in place
  *  (keeping its id, position and section, so reader links and progress
- *  survive and an author's ordering is never undone by a re-publish). */
-export function upsertCourseLesson(course: CourseRecord, lesson: CourseLesson, now: string): CourseRecord {
-	const idx = course.lessons.findIndex((l) => l.sourceChatId === lesson.sourceChatId);
-	const lessons =
-		idx < 0
-			? [...course.lessons, lesson]
-			: course.lessons.map((l, i) =>
-					i === idx ? { ...lesson, id: l.id, ...(l.section ? { section: l.section } : {}) } : l,
-				);
+ *  survive and an author's ordering is never undone by a re-publish).
+ *  A session not yet in the course may instead fill a PLANNED lesson
+ *  (`intoLessonId`), which keeps that lesson's id, place, section and brief. */
+export function upsertCourseLesson(course: CourseRecord, lesson: CourseLesson, now: string, intoLessonId?: string): CourseRecord {
+	let idx = course.lessons.findIndex((l) => l.sourceChatId === lesson.sourceChatId);
+	if (idx < 0 && intoLessonId) idx = course.lessons.findIndex((l) => l.id === intoLessonId && isPlannedLesson(l));
+	const keep = (l: CourseLesson): CourseLesson => {
+		const { status: _, ...written } = lesson;
+		return {
+			...written,
+			id: l.id,
+			...(l.section ? { section: l.section } : {}),
+			...(l.brief && !lesson.brief ? { brief: l.brief } : {}),
+		};
+	};
+	const lessons = idx < 0 ? [...course.lessons, lesson] : course.lessons.map((l, i) => (i === idx ? keep(l) : l));
 	return { ...course, lessons, updatedAt: now };
+}
+
+/** A lesson that is only planned: a title and brief, nothing to read yet. */
+export function isPlannedLesson(lesson: Pick<CourseLesson, "status">): boolean {
+	return lesson.status === "planned";
+}
+
+/** Plan lessons at the end of a course (ids injected). Blank titles are skipped. */
+export function addPlannedLessons(
+	course: CourseRecord,
+	items: ReadonlyArray<{ id: string; title: string; brief?: string; section?: string }>,
+	now: string,
+): CourseRecord {
+	const planned: CourseLesson[] = items
+		.map((item) => ({ ...item, title: str(item.title), brief: str(item.brief), section: str(item.section) }))
+		.filter((item) => item.title)
+		.map((item) => ({
+			id: item.id,
+			title: item.title,
+			sourceChatId: "",
+			publishedAt: now,
+			status: "planned" as const,
+			...(item.brief ? { brief: item.brief } : {}),
+			...(item.section ? { section: item.section } : {}),
+			blocks: [],
+		}));
+	if (planned.length === 0) return course;
+	return { ...course, lessons: [...course.lessons, ...planned], updatedAt: now };
 }
 
 /** Drop one lesson; the course is returned unchanged when the id is unknown. */
@@ -212,12 +249,12 @@ export function reorderCourseLessons(course: CourseRecord, lessonIds: readonly s
 	return { ...course, lessons: lessons as CourseLesson[], updatedAt: now };
 }
 
-/** Rename a lesson or set its section heading (an empty section clears it).
+/** Rename a lesson or set its section heading or brief (empty clears).
  *  The course is returned unchanged when the lesson id is unknown. */
 export function updateCourseLesson(
 	course: CourseRecord,
 	lessonId: string,
-	patch: { title?: string; section?: string },
+	patch: { title?: string; section?: string; brief?: string },
 	now: string,
 ): CourseRecord {
 	if (!course.lessons.some((l) => l.id === lessonId)) return course;
@@ -229,6 +266,11 @@ export function updateCourseLesson(
 			const section = str(patch.section);
 			if (section) next.section = section;
 			else delete next.section;
+		}
+		if (patch.brief !== undefined) {
+			const brief = str(patch.brief);
+			if (brief) next.brief = brief;
+			else delete next.brief;
 		}
 		return next;
 	});
@@ -258,7 +300,12 @@ export function courseSummary(course: CourseRecord): CourseSummary {
 		...(course.description ? { description: course.description } : {}),
 		createdAt: course.createdAt,
 		updatedAt: course.updatedAt,
-		lessons: course.lessons.map((l) => ({ id: l.id, title: l.title, ...(l.section ? { section: l.section } : {}) })),
+		lessons: course.lessons.map((l) => ({
+			id: l.id,
+			title: l.title,
+			...(l.section ? { section: l.section } : {}),
+			...(isPlannedLesson(l) ? { planned: true as const } : {}),
+		})),
 	};
 }
 

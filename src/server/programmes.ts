@@ -5,13 +5,16 @@ import {
 	programmeIssues,
 } from "../core/programme.ts";
 import type { ProgrammeModuleView, ProgrammeRecord, ProgrammeView } from "../core/contracts.ts";
+import { addPlannedLessons } from "../core/course.ts";
+import { newLessonId } from "./courses.ts";
 import { stores } from "./stores.ts";
 
 /**
  * Server-side programme entries (programme wave, owner 2026-10-25) for
  * app/api/programmes* and the /programmes reader pages. A programme only
  * ARRANGES courses: creating one from an outline makes empty courses for the
- * modules that don't exist yet, and deleting one never deletes a course.
+ * modules that don't exist yet (with their planned lessons), and deleting
+ * one never deletes a course.
  */
 
 export const { getProgramme, listProgrammes } = stores.programmeStore;
@@ -36,9 +39,16 @@ export function createProgrammeFromOutline(raw: unknown): ProgrammeOutcome {
 	for (const course of planned.value.newCourses) {
 		stores.courseStore.saveCourse({ ...course, createdAt: now, updatedAt: now, lessons: [] });
 	}
+	for (const plan of planned.value.lessons) {
+		const course = stores.courseStore.getCourse(plan.courseId);
+		if (!course) continue;
+		const items = plan.lessons.map((l) => ({ ...l, id: newLessonId() }));
+		stores.courseStore.saveCourse(addPlannedLessons(course, items, now));
+	}
 	const programme = stores.programmeStore.createProgramme({
 		title: parsed.value.title,
 		description: parsed.value.description,
+		audience: parsed.value.audience,
 		stages: planned.value.stages,
 	});
 	return { ok: true, programme, createdCourses: planned.value.newCourses.length };
@@ -47,7 +57,7 @@ export function createProgrammeFromOutline(raw: unknown): ProgrammeOutcome {
 /** Rename, describe, or replace the stages. Null when the id is unknown. */
 export function updateProgramme(
 	id: string,
-	patch: { title?: string; description?: string; stages?: unknown },
+	patch: { title?: string; description?: string; audience?: string; stages?: unknown },
 ): { ok: true; programme: ProgrammeRecord } | { ok: false; error: string } | null {
 	const programme = stores.programmeStore.getProgramme(id);
 	if (!programme) return null;
@@ -59,14 +69,17 @@ export function updateProgramme(
 	}
 	const title = patch.title?.trim();
 	const description = patch.description?.trim();
+	const audience = patch.audience?.trim();
 	const next: ProgrammeRecord = {
 		...programme,
 		...(title ? { title } : {}),
 		...(description !== undefined ? { description } : {}),
+		...(audience !== undefined ? { audience } : {}),
 		stages,
 		updatedAt: new Date().toISOString(),
 	};
 	if (next.description === "") delete next.description;
+	if (next.audience === "") delete next.audience;
 	stores.programmeStore.saveProgramme(next);
 	return { ok: true, programme: next };
 }

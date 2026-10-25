@@ -51,13 +51,17 @@ export function LessonList({
 	lessons,
 }: {
 	courseId: string;
-	lessons: ReadonlyArray<{ id: string; title: string; section?: string }>;
+	lessons: ReadonlyArray<{ id: string; title: string; section?: string; planned?: true }>;
 }) {
 	const { done } = useCourseProgress(courseId);
+	const written = lessons.filter((l) => !l.planned);
+	const planned = lessons.length - written.length;
 	return (
 		<>
 			<p className="text-xs uppercase tracking-wider text-muted-foreground" data-testid="course-progress">
-				{done.filter((id) => lessons.some((l) => l.id === id)).length} of {lessons.length} lessons done
+				{written.length > 0 && <>{done.filter((id) => written.some((l) => l.id === id)).length} of {written.length} lessons done</>}
+				{written.length > 0 && planned > 0 && " · "}
+				{planned > 0 && <>{planned} coming soon</>}
 			</p>
 			{courseSections(lessons).map((group, gi) => (
 				<section key={gi} className={gi > 0 && !group.section ? "mt-6" : "mt-3"} data-testid="course-section">
@@ -67,14 +71,25 @@ export function LessonList({
 					<ol className="flex flex-col gap-1.5">
 						{group.lessons.map((lesson) => (
 							<li key={lesson.id}>
-								<a
-									href={`/courses/${courseId}/${lesson.id}`}
-									className="flex items-center gap-3 rounded-lg border px-4 py-3 transition-colors hover:bg-accent"
-								>
-									<span className="w-6 shrink-0 font-mono text-xs text-muted-foreground">{lesson.number}</span>
-									<span className="min-w-0 flex-1 font-sans text-base text-foreground">{lesson.title}</span>
-									{done.includes(lesson.id) && <CheckIcon className="size-4 shrink-0 text-emerald-500" aria-label="Done" />}
-								</a>
+								{lesson.planned ? (
+									<div
+										className="flex items-center gap-3 rounded-lg border border-dashed px-4 py-3 opacity-60"
+										data-testid="lesson-planned"
+									>
+										<span className="w-6 shrink-0 font-mono text-xs text-muted-foreground">{lesson.number}</span>
+										<span className="min-w-0 flex-1 font-sans text-base text-foreground">{lesson.title}</span>
+										<span className="shrink-0 text-xs uppercase tracking-wider text-muted-foreground">Coming soon</span>
+									</div>
+								) : (
+									<a
+										href={`/courses/${courseId}/${lesson.id}`}
+										className="flex items-center gap-3 rounded-lg border px-4 py-3 transition-colors hover:bg-accent"
+									>
+										<span className="w-6 shrink-0 font-mono text-xs text-muted-foreground">{lesson.number}</span>
+										<span className="min-w-0 flex-1 font-sans text-base text-foreground">{lesson.title}</span>
+										{done.includes(lesson.id) && <CheckIcon className="size-4 shrink-0 text-emerald-500" aria-label="Done" />}
+									</a>
+								)}
 							</li>
 						))}
 					</ol>

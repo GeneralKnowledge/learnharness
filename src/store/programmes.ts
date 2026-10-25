@@ -23,13 +23,15 @@ function writeProgramme(record: ProgrammeRecord): void {
 	fs.writeFileSync(programmeFile(record.id), JSON.stringify({ ...record, version: CURRENT_PROGRAMME_VERSION }, null, "\t"), "utf-8");
 }
 
-function createProgramme(input: Pick<ProgrammeRecord, "title" | "description" | "stages">): ProgrammeRecord {
+function createProgramme(input: Pick<ProgrammeRecord, "title" | "description" | "audience" | "stages">): ProgrammeRecord {
 	const now = new Date().toISOString();
 	const description = input.description?.trim();
+	const audience = input.audience?.trim();
 	const record: ProgrammeRecord = {
 		id: `programme_${Date.now().toString(36)}_${crypto.randomUUID().slice(0, 8)}`,
 		title: input.title.trim() || "Untitled programme",
 		...(description ? { description } : {}),
+		...(audience ? { audience } : {}),
 		createdAt: now,
 		updatedAt: now,
 		stages: input.stages,

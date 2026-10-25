@@ -8,8 +8,9 @@ export async function GET() {
 
 /**
  * Publish a session as a lesson: { chatId, courseId?, courseTitle?,
- * lessonTitle?, cleanup? }. No courseId creates a new course; re-publishing a
- * session already in the course replaces its lesson in place. The wording
+ * lessonTitle?, intoLessonId?, cleanup? }. No courseId creates a new course;
+ * re-publishing a session already in the course replaces its lesson in
+ * place; intoLessonId fills that planned lesson of the course. The wording
  * cleanup pass runs unless cleanup is false.
  */
 export async function POST(req: Request) {
@@ -22,6 +23,7 @@ export async function POST(req: Request) {
 		courseId: text(body?.courseId),
 		courseTitle: text(body?.courseTitle),
 		lessonTitle: text(body?.lessonTitle),
+		intoLessonId: text(body?.intoLessonId),
 		cleanup: body?.cleanup !== false,
 	});
 	if (!outcome.ok) return Response.json({ error: outcome.error }, { status: outcome.status });

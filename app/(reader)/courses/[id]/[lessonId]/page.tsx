@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { LessonBlocks } from "@/components/course/lesson-blocks";
 import { MarkDone } from "@/components/course/course-progress";
+import { isPlannedLesson } from "@/src/core";
 import { getCourse } from "@/src/server";
 
 export const dynamic = "force-dynamic";
@@ -10,18 +11,20 @@ export const dynamic = "force-dynamic";
 export default async function LessonPage({ params }: { params: Promise<{ id: string; lessonId: string }> }) {
 	const { id, lessonId } = await params;
 	const course = getCourse(id);
-	const index = course?.lessons.findIndex((l) => l.id === lessonId) ?? -1;
+	// Planned lessons have nothing to read yet: they are not pages.
+	const lessons = course?.lessons.filter((l) => !isPlannedLesson(l)) ?? [];
+	const index = lessons.findIndex((l) => l.id === lessonId);
 	if (!course || index < 0) notFound();
-	const lesson = course.lessons[index]!;
-	const prev = course.lessons[index - 1];
-	const next = course.lessons[index + 1];
+	const lesson = lessons[index]!;
+	const prev = lessons[index - 1];
+	const next = lessons[index + 1];
 	return (
 		<main className="mx-auto w-full max-w-3xl px-4 py-12 sm:px-6">
 			<Link href={`/courses/${course.id}`} className="text-xs uppercase tracking-wider text-muted-foreground hover:text-foreground">
 				{course.title}
 			</Link>
 			<div className="mt-4 text-xs uppercase tracking-wider text-muted-foreground">
-				Lesson {index + 1} of {course.lessons.length}
+				Lesson {index + 1} of {lessons.length}
 				{lesson.section && <> · {lesson.section}</>}
 			</div>
 			<h1 className="mt-1 font-title text-3xl tracking-tight text-foreground">{lesson.title}</h1>

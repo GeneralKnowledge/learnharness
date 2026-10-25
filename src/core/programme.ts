@@ -15,6 +15,7 @@
  */
 
 import type {
+	OutlineLesson,
 	ProgrammeIssue,
 	ProgrammeModule,
 	ProgrammeOutline,
@@ -42,6 +43,24 @@ function stringList(v: unknown, where: string, field: string): Parsed<string[]> 
 	return { ok: true, value: [...new Set(v.map((s: string) => s.trim()))] };
 }
 
+function outlineLessons(v: unknown, where: string): Parsed<OutlineLesson[]> {
+	if (v === undefined || v === null) return { ok: true, value: [] };
+	if (!Array.isArray(v)) return { ok: false, error: `${where}: lessons must be a list` };
+	const lessons: OutlineLesson[] = [];
+	for (const [li, raw] of v.entries()) {
+		const at = `${where}, lesson ${li + 1}`;
+		const item = typeof raw === "string" ? { title: raw } : raw;
+		if (!isObj(item) || !str(item.title)) return { ok: false, error: `${at} needs a title` };
+		for (const field of ["brief", "section"] as const) {
+			if (item[field] !== undefined && typeof item[field] !== "string") return { ok: false, error: `${at}: ${field} must be text` };
+		}
+		const brief = str(item.brief);
+		const section = str(item.section);
+		lessons.push({ title: str(item.title), ...(brief ? { brief } : {}), ...(section ? { section } : {}) });
+	}
+	return { ok: true, value: lessons };
+}
+
 /** Check an author's outline file. Unknown fields are ignored. */
 export function parseProgrammeOutline(raw: unknown): Parsed<ProgrammeOutline> {
 	if (!isObj(raw)) return { ok: false, error: "The outline must be a JSON object" };
@@ -65,6 +84,8 @@ export function parseProgrammeOutline(raw: unknown): Parsed<ProgrammeOutline> {
 			if (!credits.ok) return credits;
 			const requires = stringList(rawModule.requires, at, "requires");
 			if (!requires.ok) return requires;
+			const lessons = outlineLessons(rawModule.lessons, at);
+			if (!lessons.ok) return lessons;
 			const description = str(rawModule.description);
 			const courseId = str(rawModule.courseId);
 			const key = str(rawModule.key);
@@ -76,25 +97,32 @@ export function parseProgrammeOutline(raw: unknown): Parsed<ProgrammeOutline> {
 				...(credits.value !== undefined ? { credits: credits.value } : {}),
 				...(rawModule.optional === true ? { optional: true } : {}),
 				...(requires.value.length > 0 ? { requires: requires.value } : {}),
+				...(lessons.value.length > 0 ? { lessons: lessons.value } : {}),
 			});
 		}
 		const description = str(rawStage.description);
 		stages.push({ title: stageTitle, ...(description ? { description } : {}), modules });
 	}
 	const description = str(raw.description);
-	return { ok: true, value: { title, ...(description ? { description } : {}), stages } };
+	const audience = str(raw.audience);
+	return { ok: true, value: { title, ...(description ? { description } : {}), ...(audience ? { audience } : {}), stages } };
 }
 
 /**
  * Turn a checked outline into stored stages. Modules that name an existing
  * course use it; the rest get a new course id (the caller creates those
- * courses, titled and described as `newCourses` says). `requires` resolves
- * against outline keys, then outline titles, then existing course ids.
+ * courses, titled and described as `newCourses` says, and plans each
+ * course's `lessons`). `requires` resolves against outline keys, then
+ * outline titles, then existing course ids.
  */
 export function planProgrammeOutline(
 	outline: ProgrammeOutline,
 	opts: { existingCourseIds: ReadonlySet<string>; newCourseId: () => string; newStageId: () => string },
-): Parsed<{ stages: ProgrammeStage[]; newCourses: Array<{ id: string; title: string; description?: string }> }> {
+): Parsed<{
+	stages: ProgrammeStage[];
+	newCourses: Array<{ id: string; title: string; description?: string }>;
+	lessons: Array<{ courseId: string; lessons: OutlineLesson[] }>;
+}> {
 	const newCourses: Array<{ id: string; title: string; description?: string }> = [];
 	const byHandle = new Map<string, string>();
 	const ambiguous = new Set<string>();
@@ -130,6 +158,7 @@ export function planProgrammeOutline(
 
 	// Second pass: resolve requires.
 	const stages: ProgrammeStage[] = [];
+	const lessons: Array<{ courseId: string; lessons: OutlineLesson[] }> = [];
 	for (const [si, stage] of placed.entries()) {
 		const modules: ProgrammeModule[] = [];
 		for (const { module: m, courseId } of stage) {
@@ -146,11 +175,12 @@ export function planProgrammeOutline(
 				...(m.optional ? { optional: true } : {}),
 				...(requires.length > 0 ? { requires } : {}),
 			});
+			if (m.lessons?.length) lessons.push({ courseId, lessons: m.lessons });
 		}
 		const description = outline.stages[si]!.description;
 		stages.push({ id: opts.newStageId(), title: outline.stages[si]!.title, ...(description ? { description } : {}), modules });
 	}
-	return { ok: true, value: { stages, newCourses } };
+	return { ok: true, value: { stages, newCourses, lessons } };
 }
 
 /** Check the structure editor's stages (PUT /api/programmes/<id>). Stage

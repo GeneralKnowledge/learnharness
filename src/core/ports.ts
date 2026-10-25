@@ -187,7 +187,7 @@ export interface CourseStore {
  *  replace-whole. Structure rules are pure core (core/programme.ts). */
 export interface ProgrammeStore {
 	/** Persist a new programme with the given stages. */
-	createProgramme(input: Pick<ProgrammeRecord, "title" | "description" | "stages">): ProgrammeRecord;
+	createProgramme(input: Pick<ProgrammeRecord, "title" | "description" | "audience" | "stages">): ProgrammeRecord;
 	/** The full record, or null if unknown id / corrupt file. */
 	getProgramme(id: string): ProgrammeRecord | null;
 	/** Every programme, most recently updated first. */
