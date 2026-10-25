@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { CheckIcon } from "lucide-react";
+import { courseSections } from "@/src/core";
 
 /**
  * Reader progress (course-engine wave, 2026-10-24): which lessons this
@@ -43,28 +44,42 @@ export function useCourseProgress(courseId: string) {
 	return { done, mark };
 }
 
-/** The course page's lesson list, with this browser's checkmarks. */
-export function LessonList({ courseId, lessons }: { courseId: string; lessons: ReadonlyArray<{ id: string; title: string }> }) {
+/** The course page's lesson list, grouped under its section headings, with
+ *  this browser's checkmarks. */
+export function LessonList({
+	courseId,
+	lessons,
+}: {
+	courseId: string;
+	lessons: ReadonlyArray<{ id: string; title: string; section?: string }>;
+}) {
 	const { done } = useCourseProgress(courseId);
 	return (
 		<>
 			<p className="text-xs uppercase tracking-wider text-muted-foreground" data-testid="course-progress">
 				{done.filter((id) => lessons.some((l) => l.id === id)).length} of {lessons.length} lessons done
 			</p>
-			<ol className="mt-3 flex flex-col gap-1.5">
-				{lessons.map((lesson, i) => (
-					<li key={lesson.id}>
-						<a
-							href={`/courses/${courseId}/${lesson.id}`}
-							className="flex items-center gap-3 rounded-lg border px-4 py-3 transition-colors hover:bg-accent"
-						>
-							<span className="w-6 shrink-0 font-mono text-xs text-muted-foreground">{i + 1}</span>
-							<span className="min-w-0 flex-1 font-sans text-base text-foreground">{lesson.title}</span>
-							{done.includes(lesson.id) && <CheckIcon className="size-4 shrink-0 text-emerald-500" aria-label="Done" />}
-						</a>
-					</li>
-				))}
-			</ol>
+			{courseSections(lessons).map((group, gi) => (
+				<section key={gi} className={gi > 0 && !group.section ? "mt-6" : "mt-3"} data-testid="course-section">
+					{group.section && (
+						<h2 className="mb-2 mt-6 font-title text-lg tracking-tight text-foreground">{group.section}</h2>
+					)}
+					<ol className="flex flex-col gap-1.5">
+						{group.lessons.map((lesson) => (
+							<li key={lesson.id}>
+								<a
+									href={`/courses/${courseId}/${lesson.id}`}
+									className="flex items-center gap-3 rounded-lg border px-4 py-3 transition-colors hover:bg-accent"
+								>
+									<span className="w-6 shrink-0 font-mono text-xs text-muted-foreground">{lesson.number}</span>
+									<span className="min-w-0 flex-1 font-sans text-base text-foreground">{lesson.title}</span>
+									{done.includes(lesson.id) && <CheckIcon className="size-4 shrink-0 text-emerald-500" aria-label="Done" />}
+								</a>
+							</li>
+						))}
+					</ol>
+				</section>
+			))}
 		</>
 	);
 }

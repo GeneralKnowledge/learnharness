@@ -59,10 +59,16 @@ export interface CourseLesson {
 	 *  session REPLACES this lesson in place (idempotent by source). */
 	sourceChatId: string;
 	publishedAt: string;
+	/** The section heading this lesson sits under (programme wave,
+	 *  2026-10-25). Consecutive lessons with the same section form one group
+	 *  in reading order; absent = no heading. */
+	section?: string;
 	blocks: CourseBlock[];
 }
 
-/** One stored course: data/courses/<id>.json. */
+/** One stored course: data/courses/<id>.json. A course is a MODULE when a
+ *  programme lists it (contracts/programme.ts); the course itself never
+ *  knows which programmes use it. */
 export interface CourseRecord {
 	id: string;
 	title: string;
@@ -80,7 +86,7 @@ export interface CourseSummary {
 	description?: string;
 	createdAt: string;
 	updatedAt: string;
-	lessons: Array<{ id: string; title: string }>;
+	lessons: Array<{ id: string; title: string; section?: string }>;
 }
 
 /** What the publish-time wording cleanup did (core/course-cleanup.ts):

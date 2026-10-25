@@ -183,13 +183,16 @@ export function courseLessonFromChat(
 }
 
 /** Add a lesson, or replace the one published from the same session in place
- *  (keeping its id and position, so reader links and progress survive). */
+ *  (keeping its id, position and section, so reader links and progress
+ *  survive and an author's ordering is never undone by a re-publish). */
 export function upsertCourseLesson(course: CourseRecord, lesson: CourseLesson, now: string): CourseRecord {
 	const idx = course.lessons.findIndex((l) => l.sourceChatId === lesson.sourceChatId);
 	const lessons =
 		idx < 0
 			? [...course.lessons, lesson]
-			: course.lessons.map((l, i) => (i === idx ? { ...lesson, id: l.id } : l));
+			: course.lessons.map((l, i) =>
+					i === idx ? { ...lesson, id: l.id, ...(l.section ? { section: l.section } : {}) } : l,
+				);
 	return { ...course, lessons, updatedAt: now };
 }
 
@@ -199,6 +202,55 @@ export function removeCourseLesson(course: CourseRecord, lessonId: string, now: 
 	return { ...course, lessons: course.lessons.filter((l) => l.id !== lessonId), updatedAt: now };
 }
 
+/** Put the lessons in the given order. Null unless `lessonIds` names every
+ *  lesson exactly once — a reorder never adds or loses a lesson. */
+export function reorderCourseLessons(course: CourseRecord, lessonIds: readonly string[], now: string): CourseRecord | null {
+	if (lessonIds.length !== course.lessons.length || new Set(lessonIds).size !== lessonIds.length) return null;
+	const byId = new Map(course.lessons.map((l) => [l.id, l]));
+	const lessons = lessonIds.map((id) => byId.get(id));
+	if (lessons.some((l) => l === undefined)) return null;
+	return { ...course, lessons: lessons as CourseLesson[], updatedAt: now };
+}
+
+/** Rename a lesson or set its section heading (an empty section clears it).
+ *  The course is returned unchanged when the lesson id is unknown. */
+export function updateCourseLesson(
+	course: CourseRecord,
+	lessonId: string,
+	patch: { title?: string; section?: string },
+	now: string,
+): CourseRecord {
+	if (!course.lessons.some((l) => l.id === lessonId)) return course;
+	const title = str(patch.title);
+	const lessons = course.lessons.map((l) => {
+		if (l.id !== lessonId) return l;
+		const next: CourseLesson = { ...l, ...(title ? { title } : {}) };
+		if (patch.section !== undefined) {
+			const section = str(patch.section);
+			if (section) next.section = section;
+			else delete next.section;
+		}
+		return next;
+	});
+	return { ...course, lessons, updatedAt: now };
+}
+
+/** Lessons grouped for display: each run of consecutive lessons sharing a
+ *  section is one group (a section may recur later as its own group).
+ *  `number` is the lesson's 1-based place in the whole course. */
+export function courseSections<L extends { section?: string }>(
+	lessons: readonly L[],
+): Array<{ section: string | null; lessons: Array<L & { number: number }> }> {
+	const groups: Array<{ section: string | null; lessons: Array<L & { number: number }> }> = [];
+	lessons.forEach((lesson, i) => {
+		const section = lesson.section ?? null;
+		const last = groups.at(-1);
+		if (last && last.section === section) last.lessons.push({ ...lesson, number: i + 1 });
+		else groups.push({ section, lessons: [{ ...lesson, number: i + 1 }] });
+	});
+	return groups;
+}
+
 export function courseSummary(course: CourseRecord): CourseSummary {
 	return {
 		id: course.id,
@@ -206,7 +258,7 @@ export function courseSummary(course: CourseRecord): CourseSummary {
 		...(course.description ? { description: course.description } : {}),
 		createdAt: course.createdAt,
 		updatedAt: course.updatedAt,
-		lessons: course.lessons.map((l) => ({ id: l.id, title: l.title })),
+		lessons: course.lessons.map((l) => ({ id: l.id, title: l.title, ...(l.section ? { section: l.section } : {}) })),
 	};
 }
 
