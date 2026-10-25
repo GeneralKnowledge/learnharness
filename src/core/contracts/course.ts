@@ -82,3 +82,11 @@ export interface CourseSummary {
 	updatedAt: string;
 	lessons: Array<{ id: string; title: string }>;
 }
+
+/** What the publish-time wording cleanup did (core/course-cleanup.ts):
+ *  off when the author opted out; failed when it could not run (the lesson
+ *  was stored as projected). */
+export type CleanupOutcome =
+	| { status: "off" }
+	| { status: "done"; rewritten: number; dropped: number; refused: number }
+	| { status: "failed"; error: string };

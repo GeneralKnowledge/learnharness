@@ -8,19 +8,21 @@ export async function GET() {
 
 /**
  * Publish a session as a lesson: { chatId, courseId?, courseTitle?,
- * lessonTitle? }. No courseId creates a new course; re-publishing a
- * session already in the course replaces its lesson in place.
+ * lessonTitle?, cleanup? }. No courseId creates a new course; re-publishing a
+ * session already in the course replaces its lesson in place. The wording
+ * cleanup pass runs unless cleanup is false.
  */
 export async function POST(req: Request) {
 	const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
 	const text = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : undefined);
 	const chatId = text(body?.chatId);
 	if (!chatId) return Response.json({ error: "chatId must be a non-empty string" }, { status: 400 });
-	const outcome = publishChatToCourse({
+	const outcome = await publishChatToCourse({
 		chatId,
 		courseId: text(body?.courseId),
 		courseTitle: text(body?.courseTitle),
 		lessonTitle: text(body?.lessonTitle),
+		cleanup: body?.cleanup !== false,
 	});
 	if (!outcome.ok) return Response.json({ error: outcome.error }, { status: outcome.status });
 	return Response.json({
@@ -29,5 +31,6 @@ export async function POST(req: Request) {
 		lessonId: outcome.lesson.id,
 		blocks: outcome.lesson.blocks.length,
 		replaced: outcome.replaced,
+		cleanup: outcome.cleanup,
 	});
 }
