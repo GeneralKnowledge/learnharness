@@ -188,15 +188,15 @@ describe("lesson assembly", () => {
 });
 
 describe("publishing (store + server)", () => {
-	it("publishes a session into a new course, then updates it in place", () => {
+	it("publishes a session into a new course, then updates it in place", async () => {
 		const chat = chatStore.createChat("Chain rule");
 		chatStore.saveMessages(chat.id, teachSession);
-		const first = publishChatToCourse({ chatId: chat.id, courseTitle: "Calculus" });
+		const first = await publishChatToCourse({ chatId: chat.id, courseTitle: "Calculus" });
 		assert.ok(first.ok);
 		assert.equal(first.course.title, "Calculus");
 		assert.equal(first.replaced, false);
 
-		const again = publishChatToCourse({ chatId: chat.id, courseId: first.course.id });
+		const again = await publishChatToCourse({ chatId: chat.id, courseId: first.course.id });
 		assert.ok(again.ok);
 		assert.equal(again.replaced, true);
 		assert.equal(again.lesson.id, first.lesson.id);
@@ -210,14 +210,47 @@ describe("publishing (store + server)", () => {
 		);
 	});
 
-	it("refuses unknown sessions, unknown courses, and sessions with nothing to teach", () => {
-		assert.deepEqual(publishChatToCourse({ chatId: "chat_missing" }), { ok: false, status: 404, error: "Session not found" });
+	it("refuses unknown sessions, unknown courses, and sessions with nothing to teach", async () => {
+		assert.deepEqual(await publishChatToCourse({ chatId: "chat_missing" }), { ok: false, status: 404, error: "Session not found" });
 		const chat = chatStore.createChat("Empty");
-		const missingCourse = publishChatToCourse({ chatId: chat.id, courseId: "course_missing" });
+		const missingCourse = await publishChatToCourse({ chatId: chat.id, courseId: "course_missing" });
 		assert.equal(missingCourse.ok, false);
 		assert.equal(!missingCourse.ok && missingCourse.status, 404);
-		const empty = publishChatToCourse({ chatId: chat.id });
+		const empty = await publishChatToCourse({ chatId: chat.id });
 		assert.equal(!empty.ok && empty.status, 400);
+	});
+
+	it("runs the cleanup pass when asked, and never blocks a publish when it fails", async () => {
+		const chat = chatStore.createChat("Chain rule cleanup");
+		chatStore.saveMessages(chat.id, teachSession);
+		const prompts: string[] = [];
+		const cleaned = await publishChatToCourse(
+			{ chatId: chat.id, courseTitle: "Cleaned", cleanup: true },
+			{
+				rewrite: async (prompt) => {
+					prompts.push(prompt);
+					return JSON.stringify({ "1:markdown": "Begin with **rates**.\n\nThen ⟦P0⟧." });
+				},
+			},
+		);
+		assert.ok(cleaned.ok);
+		assert.equal(prompts.length, 1);
+		assert.ok(!prompts[0]!.includes("<svg>"), "visuals never reach the model");
+		assert.deepEqual(cleaned.cleanup, { status: "done", rewritten: 1, dropped: 0, refused: 0 });
+		assert.deepEqual(cleaned.lesson.blocks[1], { kind: "text", markdown: "Begin with **rates**.\n\nThen $\\frac{dy}{dx}$." });
+
+		const failed = await publishChatToCourse(
+			{ chatId: chat.id, courseId: cleaned.course.id, cleanup: true },
+			{ rewrite: async () => Promise.reject(new Error("rate limited")) },
+		);
+		assert.ok(failed.ok);
+		assert.equal(failed.cleanup.status, "failed");
+		assert.equal(failed.replaced, true);
+		assert.deepEqual(failed.lesson.blocks[1], { kind: "text", markdown: "Start from **rates**.\n\nThen $\\frac{dy}{dx}$." });
+
+		const off = await publishChatToCourse({ chatId: chat.id, courseId: cleaned.course.id });
+		assert.ok(off.ok);
+		assert.deepEqual(off.cleanup, { status: "off" });
 	});
 
 	it("renames, describes, and removes lessons", () => {
