@@ -43,6 +43,21 @@ export type CourseBlock =
 	| { kind: "recall"; question: string; answer: string; role?: string }
 	/** A practice problem: the statement, then the model solution on reveal. */
 	| { kind: "problem"; statement: string; solution: string }
+	/** An exercise (exercise wave, owner 2026-10-25: "simple exercises, no
+	 *  runner"): a task the reader attempts in the page, optional hints
+	 *  revealed one at a time, then the model answer and the reader's own
+	 *  mark. Nothing is run or graded by the app. `response` says what
+	 *  the attempt box holds; a new kind of response (a runner, a numeric
+	 *  check…) is a new value here plus its renderer. */
+	| {
+			kind: "exercise";
+			task: string;
+			hints: string[];
+			answer: string;
+			response: ExerciseResponse;
+			/** For code responses: the language, for the box and the answer. */
+			language?: string;
+	  }
 	/** A figure from the visual maker (SVG markup). */
 	| { kind: "visual"; svg: string }
 	/** An interactive demo from the demo builder (single-file HTML). */
@@ -51,6 +66,11 @@ export type CourseBlock =
 	| { kind: "plan"; data: PlanBlockData };
 
 export type CourseBlockKind = CourseBlock["kind"];
+
+/** What an exercise's attempt box holds: prose (an essay, a proof, a
+ *  working) or code. */
+export const EXERCISE_RESPONSES = ["text", "code"] as const;
+export type ExerciseResponse = (typeof EXERCISE_RESPONSES)[number];
 
 export interface CourseLesson {
 	id: string;
