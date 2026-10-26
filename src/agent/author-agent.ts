@@ -84,6 +84,22 @@ const authorExplainSchema = Type.Object({
 	}),
 });
 
+const exerciseSchema = Type.Object({
+	task: Type.String({
+		description: "What the reader must do — complete on its own (data, constraints, what a finished answer looks like).",
+	}),
+	hints: Type.Array(Type.String(), {
+		description: "Hints revealed one at a time, from a nudge to nearly the method. May be empty.",
+	}),
+	answer: Type.String({
+		description: "The model answer, with its working: what the reader compares his attempt against and marks himself by.",
+	}),
+	response: Type.Union([Type.Literal("text"), Type.Literal("code")], {
+		description: "What the reader writes: text (prose, working, a proof) or code.",
+	}),
+	language: Type.Optional(Type.String({ description: "For code: the language, e.g. python." })),
+});
+
 const figureSchema = Type.Object({
 	brief: Type.String({
 		description:
@@ -167,6 +183,22 @@ export function authorTools(deps: AuthorRunDeps): Record<string, AgentTool<any>>
 			return problems.length > 0 ? invalidInputResult(AUTHOR_TOOLS.explain, problems) : recorded("Question recorded. Continue the lesson.");
 		},
 	};
+	const exercise: AgentTool<typeof exerciseSchema> = {
+		name: AUTHOR_TOOLS.exercise,
+		label: "exercise",
+		description: "Place an exercise here: a task the reader attempts, hints, and the model answer. Recorded at once; the run continues.",
+		parameters: exerciseSchema,
+		executionMode: "sequential",
+		execute: async (_id, input) => {
+			const problems = [
+				...(input.task.trim() ? [] : ["task is required."]),
+				...(input.answer.trim() ? [] : ["answer is required — write the model answer with its working."]),
+			];
+			return problems.length > 0
+				? invalidInputResult(AUTHOR_TOOLS.exercise, problems)
+				: recorded("Exercise recorded. Continue the lesson.");
+		},
+	};
 	const map: AgentTool<typeof mapSchema> = {
 		name: AUTHOR_TOOLS.map,
 		label: "lesson map",
@@ -197,6 +229,7 @@ export function authorTools(deps: AuthorRunDeps): Record<string, AgentTool<any>>
 	const tools: Record<string, AgentTool<any>> = {
 		[AUTHOR_TOOLS.quiz]: quiz,
 		[AUTHOR_TOOLS.explain]: explain,
+		[AUTHOR_TOOLS.exercise]: exercise,
 		[AUTHOR_TOOLS.map]: map,
 		[AUTHOR_TOOLS.finish]: finish,
 	};

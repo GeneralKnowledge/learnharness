@@ -18,13 +18,14 @@
 
 import type { CourseBlock, CourseLesson, CourseRecord } from "./contracts/course.ts";
 import type { CallUsage, PlanBlockData } from "./contracts/chat.ts";
-import { choiceBlock, isPlannedLesson, recallBlock } from "./course.ts";
+import { choiceBlock, exerciseBlock, isPlannedLesson, recallBlock } from "./course.ts";
 import { callCost } from "./prices.ts";
 
 /** The author agent's tool names (src/agent/author-agent.ts). */
 export const AUTHOR_TOOLS = {
 	quiz: "quiz",
 	explain: "explain",
+	exercise: "exercise",
 	figure: "figure",
 	demo: "demo",
 	map: "lesson_map",
@@ -133,6 +134,7 @@ export function authorBlocksFromMessages(messages: readonly unknown[]): CourseBl
 			const args = (part.arguments ?? {}) as Record<string, unknown>;
 			if (part.name === AUTHOR_TOOLS.quiz) push(choiceBlock(args));
 			else if (part.name === AUTHOR_TOOLS.explain) push(recallBlock(args));
+			else if (part.name === AUTHOR_TOOLS.exercise) push(exerciseBlock(args));
 			else push(artifactBlock(result.details));
 		}
 	}

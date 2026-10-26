@@ -22,7 +22,14 @@
 
 import type { ChatRecord, PlanBlockData } from "./contracts/chat.ts";
 import type { DemoResult, SteerDetails, VisualResult } from "./contracts/jobs.ts";
-import type { CourseBlock, CourseLesson, CourseQuestionOption, CourseRecord, CourseSummary } from "./contracts/course.ts";
+import type {
+	CourseBlock,
+	CourseLesson,
+	CourseQuestionOption,
+	CourseRecord,
+	CourseSummary,
+	ExerciseResponse,
+} from "./contracts/course.ts";
 import { PRACTICE_PROBLEM_TOOL, type LhMessage } from "./native-messages.ts";
 
 const CHOICE_TOOLS = new Set(["quiz", "probe"]);
@@ -91,6 +98,32 @@ function problemBlock(args: Record<string, unknown>): CourseBlock | null {
 	const solution = str(args.modelSolution);
 	if (!statement || !solution) return null;
 	return { kind: "problem", statement, solution };
+}
+
+/** An exercise call's arguments as an exercise block (null without a task
+ *  or an answer). Hints may arrive JSON-encoded, like options. */
+export function exerciseBlock(args: Record<string, unknown>): CourseBlock | null {
+	const task = str(args.task);
+	const answer = str(args.answer);
+	if (!task || !answer) return null;
+	let hints: unknown = args.hints;
+	if (typeof hints === "string") {
+		try {
+			hints = JSON.parse(hints);
+		} catch {
+			hints = [hints];
+		}
+	}
+	const response: ExerciseResponse = args.response === "code" ? "code" : "text";
+	const language = str(args.language);
+	return {
+		kind: "exercise",
+		task,
+		hints: Array.isArray(hints) ? hints.map(str).filter(Boolean) : [],
+		answer,
+		response,
+		...(response === "code" && language ? { language } : {}),
+	};
 }
 
 /** A delivered visual or demo — failures (empty svg/html) render nothing. */
